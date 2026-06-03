@@ -26,14 +26,22 @@ else
         $(wildcard /usr/share/wayland-protocols/unstable/wlr-layer-shell-unstable-v1.xml) \
         $(wildcard /usr/local/share/wayland-protocols/unstable/wlr-layer-shell-unstable-v1.xml) \
         assets/wlr-layer-shell-unstable-v1.xml)
+    # layer-shell's get_popup request references xdg_popup, so the generated
+    # layer-shell code needs xdg_popup_interface, which lives in xdg-shell.
+    XDG_XML ?= $(firstword \
+        $(wildcard /usr/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml) \
+        $(wildcard /usr/local/share/wayland-protocols/stable/xdg-shell/xdg-shell.xml) \
+        assets/xdg-shell.xml)
     WLR_PROTO_C = $(BUILDDIR)/wlr-layer-shell-unstable-v1-protocol.c
     WLR_PROTO_H = $(BUILDDIR)/wlr-layer-shell-unstable-v1-client-protocol.h
+    XDG_PROTO_C = $(BUILDDIR)/xdg-shell-protocol.c
     OBJS    = $(BUILDDIR)/main.o $(BUILDDIR)/image.o $(BUILDDIR)/log.o \
               $(BUILDDIR)/overlay_wayland.o \
-              $(BUILDDIR)/wlr-layer-shell-unstable-v1-protocol.o
+              $(BUILDDIR)/wlr-layer-shell-unstable-v1-protocol.o \
+              $(BUILDDIR)/xdg-shell-protocol.o
     CFLAGS += $(shell pkg-config --cflags wayland-client cairo libjpeg)
     LIBS    = $(shell pkg-config --libs wayland-client cairo libjpeg) -lgif
-    GENERATED = $(DEFAULT_IMG) $(WLR_PROTO_H) $(WLR_PROTO_C)
+    GENERATED = $(DEFAULT_IMG) $(WLR_PROTO_H) $(WLR_PROTO_C) $(XDG_PROTO_C)
 endif
 
 all: $(BIN)
@@ -50,6 +58,9 @@ $(WLR_PROTO_H): $(WLR_XML) | $(BUILDDIR)
 	$(WAYLAND_SCANNER) client-header $< $@
 
 $(WLR_PROTO_C): $(WLR_XML) | $(BUILDDIR)
+	$(WAYLAND_SCANNER) private-code $< $@
+
+$(XDG_PROTO_C): $(XDG_XML) | $(BUILDDIR)
 	$(WAYLAND_SCANNER) private-code $< $@
 
 # --- compilation ---------------------------------------------------------
