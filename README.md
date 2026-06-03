@@ -28,7 +28,7 @@ image. Animated GIFs loop until dismissed. Click the image or press
 
 Download the binary for your platform from the
 [latest release](https://github.com/uRadical/ysnp/releases/latest):
-`ysnp-linux-x86_64`, `ysnp-macos-arm64`, or `ysnp-macos-x86_64`.
+`ysnp-linux-x86_64` or `ysnp-macos-arm64` (Apple Silicon).
 
 ```sh
 chmod +x ysnp-*                  # make it executable
