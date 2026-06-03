@@ -1,0 +1,10 @@
+#!/bin/sh
+# Replace the following line with your actual test or lint command
+# go test ./...
+
+if [ $? -ne 0 ]; then
+    ysnp &
+    exit 1
+fi
+
+exit 0

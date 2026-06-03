@@ -1,0 +1,27 @@
+# Build output
+/build/
+/ysnp
+
+# Object, dependency & coverage files (in case of out-of-tree builds)
+*.o
+*.d
+*.gcno
+*.gcda
+
+# Core dumps
+core
+core.*
+vgcore.*
+
+# Editors / IDEs
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Local Claude Code settings (project settings.json may be committed)
+.claude/settings.local.json

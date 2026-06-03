@@ -1,0 +1,73 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+          - os: macos-14
+            target: macos-arm64
+          - os: macos-13
+            target: macos-x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwayland-dev libwayland-bin \
+            libcairo2-dev libjpeg-dev libgif-dev \
+            wayland-protocols
+
+      - name: Build
+        run: make
+
+      - name: Test
+        run: make test
+
+      - name: Rename binary
+        run: mv ysnp ysnp-${{ matrix.target }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ysnp-${{ matrix.target }}
+          path: ysnp-${{ matrix.target }}
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: |
+          chmod +x ysnp-*
+          sha256sum ysnp-* > SHA256SUMS
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ysnp-*
+            dist/SHA256SUMS
+          generate_release_notes: true
