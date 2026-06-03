@@ -5,17 +5,13 @@
  * compositor centers on the output.
  */
 
-#include <wayland-client.h>
-#include "wlr-layer-shell-unstable-v1-client-protocol.h"
-
-#include <cairo/cairo.h>
-#include <jpeglib.h>
-#include <gif_lib.h>
-
+/* Standard headers first — in particular <stdio.h> must precede <jpeglib.h>,
+ * which uses FILE/size_t but does not include the headers that define them. */
 #include <errno.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <setjmp.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -24,6 +20,13 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
+
+#include <wayland-client.h>
+#include "wlr-layer-shell-unstable-v1-client-protocol.h"
+
+#include <cairo/cairo.h>
+#include <jpeglib.h>
+#include <gif_lib.h>
 
 #include "overlay.h"
 #include "log.h"
@@ -649,7 +652,11 @@ static void registry_global(void *d, struct wl_registry *reg, uint32_t name,
     } else if (strcmp(iface, wl_shm_interface.name) == 0) {
         shm = wl_registry_bind(reg, name, &wl_shm_interface, 1);
     } else if (strcmp(iface, wl_seat_interface.name) == 0) {
-        seat = wl_registry_bind(reg, name, &wl_seat_interface, 5);
+        /* Bind at version 1: a higher-version wl_pointer/wl_keyboard emits
+         * events (frame, axis_source, repeat_info, …) that libwayland would
+         * dispatch to our NULL listener slots and crash. v1 emits only the
+         * events we actually handle (enter/leave/motion/button/axis, key). */
+        seat = wl_registry_bind(reg, name, &wl_seat_interface, 1);
         wl_seat_add_listener(seat, &seat_listener, NULL);
     }
 }
