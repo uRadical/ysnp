@@ -44,9 +44,7 @@ $(BUILDDIR):
 # --- generated sources ---------------------------------------------------
 
 $(DEFAULT_IMG): assets/default.gif | $(BUILDDIR)
-	xxd -i $< | sed \
-	    's/assets_default_gif/default_img_data/g; \
-	     s/unsigned int default_img_data_len/unsigned int default_img_len/' > $@
+	xxd -i $< | sed -e 's/assets_default_gif/default_img_data/g' -e 's/unsigned int default_img_data_len/unsigned int default_img_len/' > $@
 
 $(WLR_PROTO_H): $(WLR_XML) | $(BUILDDIR)
 	$(WAYLAND_SCANNER) client-header $< $@
