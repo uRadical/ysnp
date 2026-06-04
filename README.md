@@ -6,8 +6,8 @@
 
 [![ci](https://github.com/uRadical/ysnp/actions/workflows/ci.yml/badge.svg)](https://github.com/uRadical/ysnp/actions/workflows/ci.yml)
 [![release](https://github.com/uRadical/ysnp/actions/workflows/release.yml/badge.svg)](https://github.com/uRadical/ysnp/actions/workflows/release.yml)
-[![latest release](https://img.shields.io/github/v/release/uRadical/ysnp)](https://github.com/uRadical/ysnp/releases/latest)
-[![license: MIT](https://img.shields.io/github/license/uRadical/ysnp)](LICENSE)
+[![latest release](https://img.shields.io/github/v/release/uRadical/ysnp?cacheSeconds=3600)](https://github.com/uRadical/ysnp/releases/latest)
+[![license: MIT](https://img.shields.io/github/license/uRadical/ysnp?cacheSeconds=3600)](LICENSE)
 ![platforms](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-blue)
 
 A cross-platform image overlay for Linux and macOS, written in pure C
