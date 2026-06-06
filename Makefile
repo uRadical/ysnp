@@ -41,7 +41,15 @@ else
               $(BUILDDIR)/wlr-layer-shell-unstable-v1-protocol.o \
               $(BUILDDIR)/xdg-shell-protocol.o
     CFLAGS += $(shell pkg-config --cflags wayland-client cairo libjpeg x11 xrandr)
-    LIBS    = $(shell pkg-config --libs wayland-client cairo libjpeg x11 xrandr) -lgif
+    # libjpeg's soname differs across distros (Ubuntu: .so.8, Fedora: .so.62),
+    # so release binaries link the small decoders statically; the remaining
+    # dynamic deps (cairo, X11, wayland, glibc) share sonames everywhere.
+    ifdef STATIC_DECODERS
+        LIBS = $(shell pkg-config --libs wayland-client cairo x11 xrandr) \
+               -l:libjpeg.a -l:libgif.a
+    else
+        LIBS = $(shell pkg-config --libs wayland-client cairo libjpeg x11 xrandr) -lgif
+    endif
     GENERATED = $(DEFAULT_IMG) $(WLR_PROTO_H) $(WLR_PROTO_C) $(XDG_PROTO_C)
 endif
 

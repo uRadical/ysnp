@@ -31,7 +31,9 @@ jobs:
             wayland-protocols
 
       - name: Build
-        run: make
+        # STATIC_DECODERS only affects the Linux link; the mac Makefile branch
+        # ignores it.
+        run: make STATIC_DECODERS=1
 
       - name: Test
         run: make test
