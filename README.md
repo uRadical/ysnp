@@ -45,8 +45,8 @@ Clear the flag (or right-click → Open once):
 xattr -d com.apple.quarantine ~/.local/bin/ysnp
 ```
 
-The Linux binary is dynamically linked against cairo, libjpeg, giflib and
-wayland — if your distro ships incompatible library versions, build from source
+The Linux binary is dynamically linked against cairo, libjpeg, giflib, wayland
+and X11 — if your distro ships incompatible library versions, build from source
 instead (below).
 
 ### From source
@@ -61,9 +61,13 @@ See [Dependencies](#dependencies) and [Build](#build).
 - `cairo`
 - `libjpeg`
 - `giflib`
+- `libX11` + `libXrandr`
 - `wayland-scanner` (build-time, from `wayland-protocols`)
-- A wlroots-based compositor (Sway, Hyprland, labwc, river, …) for the
-  `wlr-layer-shell` protocol
+
+On a wlroots-based compositor (Sway, Hyprland, labwc, river, …) the overlay is
+a native `wlr-layer-shell` surface. On compositors without layer-shell (GNOME,
+KDE) it falls back to an X11 override-redirect window via XWayland, which also
+covers plain X11 desktops.
 
 **macOS**
 
@@ -136,14 +140,18 @@ failure that only printed to stderr would be invisible. Instead, every error is:
   `~/.local/state/ysnp/ysnp.log`), with a timestamp; and
 - surfaced as a **desktop notification** (`notify-send` on Linux, `osascript` on
   macOS) so you see *why* nothing appeared — most usefully when the overlay
-  can't be shown (e.g. running on a compositor without `wlr-layer-shell`).
+  can't be shown (e.g. neither a `wlr-layer-shell` compositor nor an X11
+  display is available).
 
 If you ran a push and no overlay appeared, check that log first.
 
 ## Notes
 
-- `main.c` contains zero `#ifdef`; all platform differences live in
-  `overlay_wayland.c` (pure C) and `overlay_macos.m` (Objective-C).
+- `main.c` contains zero `#ifdef`; all platform differences live behind
+  `overlay.h` — `overlay_macos.m` (Objective-C) on macOS, and on Linux
+  `overlay_linux.c`, which tries the Wayland backend (`overlay_wayland.c`)
+  and falls back to X11 (`overlay_x11.c`). Image decoding shared by the
+  Linux backends lives in `decode.c`.
 - The Linux event loop is driven by `poll()` with a computed timeout — animated
   GIFs advance frames on schedule with no busy-looping; static images simply
   block until an input event arrives.

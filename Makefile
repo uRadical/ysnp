@@ -36,11 +36,12 @@ else
     WLR_PROTO_H = $(BUILDDIR)/wlr-layer-shell-unstable-v1-client-protocol.h
     XDG_PROTO_C = $(BUILDDIR)/xdg-shell-protocol.c
     OBJS    = $(BUILDDIR)/main.o $(BUILDDIR)/image.o $(BUILDDIR)/log.o \
-              $(BUILDDIR)/overlay_wayland.o \
+              $(BUILDDIR)/decode.o $(BUILDDIR)/overlay_linux.o \
+              $(BUILDDIR)/overlay_wayland.o $(BUILDDIR)/overlay_x11.o \
               $(BUILDDIR)/wlr-layer-shell-unstable-v1-protocol.o \
               $(BUILDDIR)/xdg-shell-protocol.o
-    CFLAGS += $(shell pkg-config --cflags wayland-client cairo libjpeg)
-    LIBS    = $(shell pkg-config --libs wayland-client cairo libjpeg) -lgif
+    CFLAGS += $(shell pkg-config --cflags wayland-client cairo libjpeg x11 xrandr)
+    LIBS    = $(shell pkg-config --libs wayland-client cairo libjpeg x11 xrandr) -lgif
     GENERATED = $(DEFAULT_IMG) $(WLR_PROTO_H) $(WLR_PROTO_C) $(XDG_PROTO_C)
 endif
 
