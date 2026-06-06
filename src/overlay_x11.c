@@ -4,16 +4,22 @@
  * runs under XWayland, and for plain X11 desktops. An override-redirect
  * window is unmanaged: the WM adds no decorations and maps it above regular
  * windows, which is as close to layer-shell's overlay layer as core X11
- * gets. Frames are decoded by decode.c before ysnp_x11_show() is called. */
+ * gets. Frames are decoded by decode.c before ysnp_x11_show() is called.
+ *
+ * Exception: under WSLg, only *managed* top-levels get a Windows-side window
+ * (the RAIL shell never surfaces override-redirect windows), so on WSL we
+ * create a normal window instead and strip its decorations via Motif hints. */
 
 #include <poll.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
+#include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <X11/extensions/Xrandr.h>
 
@@ -42,6 +48,9 @@ static Window prev_focus;
 static int prev_focus_revert;
 static int focused;
 
+static int managed; /* WSLg: normal managed window instead of override-redirect */
+static Atom wm_delete_window;
+
 static int current_frame;
 static int running = 1;
 
@@ -54,6 +63,25 @@ static uint32_t get_time_ms(void) {
 }
 
 static uint32_t next_frame_time;
+
+/* ---- WSL detection ------------------------------------------------------ */
+
+static int running_under_wsl(void) {
+    if (getenv("WSL_DISTRO_NAME") || getenv("WSL_INTEROP")) {
+        return 1;
+    }
+    /* Fallback for sessions that scrub the env (e.g. launched from a hook):
+     * the WSL kernel always identifies itself in /proc/version. */
+    FILE *fp = fopen("/proc/version", "r");
+    if (!fp) {
+        return 0;
+    }
+    char buf[256] = {0};
+    size_t n = fread(buf, 1, sizeof(buf) - 1, fp);
+    fclose(fp);
+    (void)n;
+    return strstr(buf, "microsoft") != NULL || strstr(buf, "Microsoft") != NULL;
+}
 
 /* ---- X error handling --------------------------------------------------- */
 
@@ -182,8 +210,10 @@ void ysnp_x11_show(void) {
     int x = mx + (mw - win_w) / 2;
     int y = my + (mh - win_h) / 2;
 
+    managed = running_under_wsl();
+
     XSetWindowAttributes attrs;
-    attrs.override_redirect = True;
+    attrs.override_redirect = managed ? False : True;
     attrs.colormap = XCreateColormap(dpy, root, vinfo.visual, AllocNone);
     attrs.background_pixel = 0; /* transparent under a compositor */
     attrs.border_pixel = 0;     /* required: depth differs from the parent */
@@ -198,6 +228,43 @@ void ysnp_x11_show(void) {
     XStoreName(dpy, win, "ysnp");
     XClassHint class_hint = {(char *)"ysnp", (char *)"ysnp"};
     XSetClassHint(dpy, win, &class_hint);
+
+    if (managed) {
+        /* Undecorated: Motif hints (flags = MWM_HINTS_DECORATIONS,
+         * decorations = 0) — ancient, but the one hint every WM and WSLg's
+         * RAIL shell honor. */
+        Atom motif = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);
+        long hints[5] = {2, 0, 0, 0, 0};
+        XChangeProperty(dpy, win, motif, motif, 32, PropModeReplace,
+                        (unsigned char *)hints, 5);
+
+        /* Splash type + above state approximate the overlay layer. */
+        Atom type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+        Atom splash = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_SPLASH", False);
+        XChangeProperty(dpy, win, type, XA_ATOM, 32, PropModeReplace,
+                        (unsigned char *)&splash, 1);
+        Atom state = XInternAtom(dpy, "_NET_WM_STATE", False);
+        Atom above = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
+        XChangeProperty(dpy, win, state, XA_ATOM, 32, PropModeReplace,
+                        (unsigned char *)&above, 1);
+
+        /* Pin the geometry so the WM honors our position and can't resize
+         * the window out from under the cairo surface. */
+        XSizeHints *size = XAllocSizeHints();
+        if (size) {
+            size->flags = PPosition | PMinSize | PMaxSize;
+            size->x = x;
+            size->y = y;
+            size->min_width = size->max_width = win_w;
+            size->min_height = size->max_height = win_h;
+            XSetWMNormalHints(dpy, win, size);
+            XFree(size);
+        }
+
+        /* Dismiss instead of dying when the close button / Alt-F4 hits us. */
+        wm_delete_window = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
+        XSetWMProtocols(dpy, win, &wm_delete_window, 1);
+    }
 
     win_surface = cairo_xlib_surface_create(dpy, win, vinfo.visual, win_w, win_h);
     if (cairo_surface_status(win_surface) != CAIRO_STATUS_SUCCESS) {
@@ -214,8 +281,10 @@ static void take_focus(void) {
     /* Grab keyboard focus so Escape dismisses (matching layer-shell's
      * keyboard_interactivity), remembering the old focus to restore on exit.
      * Done on first Expose: the window is certainly viewable then, and
-     * XSetInputFocus on an unviewable window is a BadMatch. */
-    if (focused) {
+     * XSetInputFocus on an unviewable window is a BadMatch. Managed windows
+     * (WSLg) get focus from the WM on activation; stealing it manually would
+     * fight the RAIL shell's Windows-side focus tracking. */
+    if (focused || managed) {
         return;
     }
     XGetInputFocus(dpy, &prev_focus, &prev_focus_revert);
@@ -244,6 +313,11 @@ void ysnp_x11_run(void) {
                 break;
             case KeyPress:
                 if (XLookupKeysym(&ev.xkey, 0) == XK_Escape) {
+                    overlay_close();
+                }
+                break;
+            case ClientMessage:
+                if ((Atom)ev.xclient.data.l[0] == wm_delete_window) {
                     overlay_close();
                 }
                 break;
