@@ -1,8 +1,9 @@
 #!/bin/sh
-# Replace the following line with your actual test or lint command
-# go test ./...
+# Replace `true` below with your actual test or lint command, e.g.:
+#   go test ./...
+# When the command fails, ysnp shows the overlay and blocks the push.
 
-if [ $? -ne 0 ]; then
+if ! true; then
     ysnp &
     exit 1
 fi

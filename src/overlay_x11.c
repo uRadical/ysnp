@@ -26,7 +26,6 @@
 #include <cairo/cairo.h>
 #include <cairo/cairo-xlib.h>
 
-#include "overlay.h"
 #include "overlay_backends.h"
 #include "decode.h"
 #include "log.h"
@@ -173,9 +172,12 @@ static void render_frame(cairo_surface_t *frame) {
 /* ---- backend API ------------------------------------------------------- */
 
 void ysnp_x11_show(void) {
+    running = 1;
+
     dpy = XOpenDisplay(NULL);
     if (!dpy) {
-        ysnp_die("cannot connect to Wayland (no layer-shell) or X11 display");
+        ysnp_die("no usable display: the Wayland compositor (if any) lacks "
+                 "layer-shell, and no X11 display could be opened");
     }
     XSetErrorHandler(on_x_error);
 
@@ -309,16 +311,19 @@ void ysnp_x11_run(void) {
                 }
                 break;
             case ButtonPress:
-                overlay_close();
+                ysnp_x11_close();
                 break;
             case KeyPress:
                 if (XLookupKeysym(&ev.xkey, 0) == XK_Escape) {
-                    overlay_close();
+                    ysnp_x11_close();
                 }
                 break;
             case ClientMessage:
-                if ((Atom)ev.xclient.data.l[0] == wm_delete_window) {
-                    overlay_close();
+                /* Only meaningful in the managed (WSLg) path; unmanaged
+                 * windows never registered WM_DELETE_WINDOW, where the
+                 * atom would be None (0) and match stray messages. */
+                if (managed && (Atom)ev.xclient.data.l[0] == wm_delete_window) {
+                    ysnp_x11_close();
                 }
                 break;
             }

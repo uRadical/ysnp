@@ -20,6 +20,11 @@
 #include "log.h"
 #include "default_img.h"
 
+/* Reject absurd image dimensions early: no display needs them, and they
+ * would otherwise make allocation sizes attacker-controlled (a hostile GIF
+ * header can claim 65535x65535, which overcommit may happily grant). */
+#define YSNP_MAX_DIM 16384
+
 /* ---- shared frame storage ---------------------------------------------- */
 
 cairo_surface_t **ysnp_frames;
@@ -84,6 +89,11 @@ static cairo_surface_t *load_jpeg(const char *path) {
 
     int w = (int)cinfo.output_width;
     int h = (int)cinfo.output_height;
+    if (w <= 0 || h <= 0 || w > YSNP_MAX_DIM || h > YSNP_MAX_DIM) {
+        jpeg_destroy_decompress(&cinfo);
+        fclose(fp);
+        return NULL;
+    }
 
     surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
     if (cairo_surface_status(surf) != CAIRO_STATUS_SUCCESS) {
@@ -102,7 +112,7 @@ static cairo_surface_t *load_jpeg(const char *path) {
     while ((int)cinfo.output_scanline < h) {
         int y = (int)cinfo.output_scanline;
         jpeg_read_scanlines(&cinfo, row, 1);
-        uint32_t *out = (uint32_t *)(dst + y * stride);
+        uint32_t *out = (uint32_t *)(dst + (size_t)y * (size_t)stride);
         const unsigned char *in = row[0];
         for (int x = 0; x < w; x++) {
             uint32_t r = in[x * 3 + 0];
@@ -160,9 +170,23 @@ static int load_gif(const char *path, const unsigned char *mem, size_t mem_len) 
     int canvas_w = gif->SWidth;
     int canvas_h = gif->SHeight;
     int n = gif->ImageCount;
-    if (n < 1) {
+    if (n < 1 || canvas_w <= 0 || canvas_h <= 0 ||
+        canvas_w > YSNP_MAX_DIM || canvas_h > YSNP_MAX_DIM) {
         DGifCloseFile(gif, &err);
         return 0;
+    }
+
+    /* Validate every frame before compositing: a hostile file can declare a
+     * 65535x65535 frame on a tiny canvas, which would otherwise send the
+     * paint loop through ~4 billion clamp-and-skip iterations (CPU DoS). */
+    for (int i = 0; i < n; i++) {
+        GifImageDesc *d = &gif->SavedImages[i].ImageDesc;
+        if (d->Width <= 0 || d->Height <= 0 ||
+            d->Width > YSNP_MAX_DIM || d->Height > YSNP_MAX_DIM ||
+            !gif->SavedImages[i].RasterBits) {
+            DGifCloseFile(gif, &err);
+            return 0;
+        }
     }
 
     ysnp_frames = calloc((size_t)n, sizeof(*ysnp_frames));
@@ -209,7 +233,10 @@ static int load_gif(const char *path, const unsigned char *mem, size_t mem_len) 
                 if (cx < 0 || cx >= canvas_w) {
                     continue;
                 }
-                int idx = si->RasterBits[y * desc->Width + x];
+                /* size_t arithmetic: with huge attacker-controlled frame
+                 * dimensions (and calloc succeeding via overcommit), the
+                 * int product could overflow into a negative index. */
+                int idx = si->RasterBits[(size_t)y * (size_t)desc->Width + (size_t)x];
                 if (idx == transparent) {
                     continue; /* leave existing canvas pixel */
                 }
@@ -219,7 +246,7 @@ static int load_gif(const char *path, const unsigned char *mem, size_t mem_len) 
                     argb = (0xFFu << 24) | ((uint32_t)c.Red << 16) |
                            ((uint32_t)c.Green << 8) | (uint32_t)c.Blue;
                 }
-                canvas[cy * canvas_w + cx] = argb;
+                canvas[(size_t)cy * (size_t)canvas_w + (size_t)cx] = argb;
             }
         }
 
@@ -232,7 +259,8 @@ static int load_gif(const char *path, const unsigned char *mem, size_t mem_len) 
         unsigned char *dst = cairo_image_surface_get_data(surf);
         int stride = cairo_image_surface_get_stride(surf);
         for (int y = 0; y < canvas_h; y++) {
-            memcpy(dst + y * stride, canvas + y * canvas_w,
+            memcpy(dst + (size_t)y * (size_t)stride,
+                   canvas + (size_t)y * (size_t)canvas_w,
                    (size_t)canvas_w * sizeof(uint32_t));
         }
         cairo_surface_mark_dirty(surf);
@@ -256,7 +284,7 @@ static int load_gif(const char *path, const unsigned char *mem, size_t mem_len) 
                     if (cx < 0 || cx >= canvas_w) {
                         continue;
                     }
-                    canvas[cy * canvas_w + cx] = 0;
+                    canvas[(size_t)cy * (size_t)canvas_w + (size_t)cx] = 0;
                 }
             }
         } else if (disposal == DISPOSE_PREVIOUS) {

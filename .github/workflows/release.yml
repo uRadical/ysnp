@@ -27,13 +27,19 @@ jobs:
           sudo apt-get install -y \
             libwayland-dev libwayland-bin \
             libcairo2-dev libjpeg-dev libgif-dev \
-            libx11-dev libxrandr-dev \
+            libx11-dev libxrandr-dev libcurl4-openssl-dev \
             wayland-protocols
 
       - name: Build
         # STATIC_DECODERS only affects the Linux link; the mac Makefile branch
-        # ignores it.
-        run: make STATIC_DECODERS=1
+        # ignores it. VERSION is pinned from the tag because the shallow
+        # checkout can't always `git describe`. GIPHY_API_KEY is baked in from
+        # a repo secret so --giphy works out of the box in release binaries;
+        # passed via env (not the command line) to keep it out of process
+        # listings, and GitHub masks the secret value in logs.
+        env:
+          GIPHY_API_KEY: ${{ secrets.GIPHY_API_KEY }}
+        run: make STATIC_DECODERS=1 VERSION=${{ github.ref_name }} GIPHY_API_KEY="$GIPHY_API_KEY"
 
       - name: Test
         run: make test

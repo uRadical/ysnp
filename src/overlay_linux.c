@@ -30,9 +30,12 @@ void overlay_run(void) {
 }
 
 void overlay_close(void) {
+    /* Backend input handlers call ysnp_wl_close/ysnp_x11_close directly, so
+     * this dispatcher can never race backend selection: a close arriving
+     * before a backend is chosen (BACKEND_NONE) is a no-op. */
     if (backend == BACKEND_WAYLAND) {
         ysnp_wl_close();
-    } else {
+    } else if (backend == BACKEND_X11) {
         ysnp_x11_close();
     }
 }

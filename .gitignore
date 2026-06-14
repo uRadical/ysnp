@@ -13,6 +13,12 @@ core
 core.*
 vgcore.*
 
+# libFuzzer artifacts (corpus seeds under tests/corpus/ are tracked)
+crash-*
+oom-*
+timeout-*
+leak-*
+
 # Editors / IDEs
 *.swp
 *.swo

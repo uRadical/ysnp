@@ -24,7 +24,6 @@
 
 #include <cairo/cairo.h>
 
-#include "overlay.h"
 #include "overlay_backends.h"
 #include "decode.h"
 #include "log.h"
@@ -197,7 +196,7 @@ static void kb_key(void *d, struct wl_keyboard *k, uint32_t s, uint32_t t,
     (void)d; (void)k; (void)s; (void)t;
     /* key code 1 == Escape (Linux evdev). */
     if (key == 1 && state == WL_KEYBOARD_KEY_STATE_PRESSED) {
-        overlay_close();
+        ysnp_wl_close();
     }
 }
 static void kb_modifiers(void *d, struct wl_keyboard *k, uint32_t s, uint32_t md,
@@ -233,7 +232,7 @@ static void pt_button(void *d, struct wl_pointer *p, uint32_t s, uint32_t t,
                       uint32_t button, uint32_t state) {
     (void)d; (void)p; (void)s; (void)t; (void)button;
     if (state == WL_POINTER_BUTTON_STATE_PRESSED) {
-        overlay_close();
+        ysnp_wl_close();
     }
 }
 static void pt_axis(void *d, struct wl_pointer *p, uint32_t t, uint32_t axis, wl_fixed_t v) {
@@ -302,7 +301,7 @@ static void layer_configure(void *d, struct zwlr_layer_surface_v1 *ls,
 
 static void layer_closed(void *d, struct zwlr_layer_surface_v1 *ls) {
     (void)d; (void)ls;
-    overlay_close();
+    ysnp_wl_close();
 }
 
 static const struct zwlr_layer_surface_v1_listener layer_listener = {
@@ -355,6 +354,8 @@ static void disconnect_display(void) {
 }
 
 int ysnp_wl_try_show(void) {
+    running = 1;
+
     display = wl_display_connect(NULL);
     if (!display) {
         return 0; /* no Wayland at all — X11 session or bare console */
@@ -373,6 +374,10 @@ int ysnp_wl_try_show(void) {
     }
 
     surface = wl_compositor_create_surface(compositor);
+    if (!surface) {
+        disconnect_display();
+        return 0;
+    }
     layer_surface = zwlr_layer_shell_v1_get_layer_surface(
         layer_shell, surface, NULL, ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, "ysnp");
     if (!layer_surface) {

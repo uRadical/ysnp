@@ -22,11 +22,43 @@ the screen, on top of all other windows. No arguments, no message — just the
 image. Animated GIFs loop until dismissed. Click the image or press
 <kbd>Escape</kbd> to close it.
 
+With `--giphy` (`-g`) it instead pulls a random rejection-themed GIF from
+[Giphy](https://giphy.com) — it picks one of a handful of search terms
+(`nope`, `denied`, `you shall not pass`, …) at random, fetches a random
+matching GIF, and overlays that. If the network call fails it falls back to the
+embedded default, so a push is never blocked by a flaky connection.
+
+`--giphy` needs a Giphy API key. Official release binaries have one baked in at
+build time (from a GitHub secret), so they work out of the box. For builds from
+source, supply your own — either set `GIPHY_API_KEY` in the environment at
+runtime, or bake one in at compile time with `make GIPHY_API_KEY=yourkey`. The
+runtime environment variable always takes precedence over a baked-in key, so
+you can override or rotate it without rebuilding. With no key from either
+source, `--giphy` silently falls back to the embedded default image.
+
 ## Install
+
+### Install script
+
+The quickest way — detects your platform, downloads the matching release
+binary, verifies its checksum, and installs it to `~/.local/bin` (no root):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/uRadical/ysnp/main/install.sh | sh
+```
+
+Install somewhere else with `YSNP_BIN_DIR`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/uRadical/ysnp/main/install.sh | YSNP_BIN_DIR=/usr/local/bin sh
+```
+
+The script also creates `~/.config/ysnp/images/`, clears the macOS quarantine
+flag, and warns if the install directory isn't on your `PATH`.
 
 ### Prebuilt binary
 
-Download the binary for your platform from the
+Or download the binary for your platform by hand from the
 [latest release](https://github.com/uRadical/ysnp/releases/latest):
 `ysnp-linux-x86_64` or `ysnp-macos-arm64` (Apple Silicon).
 
@@ -45,9 +77,10 @@ Clear the flag (or right-click → Open once):
 xattr -d com.apple.quarantine ~/.local/bin/ysnp
 ```
 
-The Linux binary is dynamically linked against cairo, libjpeg, giflib, wayland
-and X11 — if your distro ships incompatible library versions, build from source
-instead (below).
+The Linux release binary statically links libjpeg and giflib (their sonames
+differ across distros) and dynamically links cairo, wayland-client, X11,
+XRandR and libcurl, whose sonames are stable everywhere. It needs glibc ≥ the Ubuntu LTS
+it was built on; on older systems build from source instead (below).
 
 ### From source
 
@@ -62,6 +95,7 @@ See [Dependencies](#dependencies) and [Build](#build).
 - `libjpeg`
 - `giflib`
 - `libX11` + `libXrandr`
+- `libcurl` (for `--giphy`)
 - `wayland-scanner` (build-time, from `wayland-protocols`)
 
 On a wlroots-based compositor (Sway, Hyprland, labwc, river, …) the overlay is
@@ -80,8 +114,18 @@ make           # build ./ysnp
 make install   # install to ~/.local/bin and create the images dir
 make install-hook  # copy hooks/pre-push into this repo's .git/hooks/
 make test      # run the unit tests (AddressSanitizer + UBSan)
+make fuzz      # build the libFuzzer image-decoder harness (Linux + clang)
 make debug     # rebuild with -g -O0 -fsanitize=address,undefined
 make clean     # remove build/ and the binary
+```
+
+`ysnp --version` reports the build's `git describe` (or the release tag).
+
+To fuzz the image decoders (the code that parses untrusted bytes):
+
+```sh
+make fuzz
+ASAN_OPTIONS=allocator_may_return_null=1 build/fuzz_decode -detect_leaks=0 tests/corpus
 ```
 
 `make install` copies the binary to `~/.local/bin/ysnp` and creates
@@ -160,6 +204,7 @@ If you ran a push and no overlay appeared, check that log first.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The vendored `wlr-layer-shell` protocol
-description (`assets/wlr-layer-shell-unstable-v1.xml`) carries its own MIT
-copyright notice from the wlroots project.
+MIT — see [LICENSE](LICENSE). The vendored Wayland protocol descriptions
+(`assets/wlr-layer-shell-unstable-v1.xml` from the wlroots project, and
+`assets/xdg-shell.xml` from wayland-protocols) each carry their own MIT
+copyright notice.
